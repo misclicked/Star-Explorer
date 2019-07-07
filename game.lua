@@ -12,6 +12,27 @@ local physics = require( "physics" )
 physics.start()
 physics.setGravity( 0, 0 )
 
+-- image sheet for blue orb (upgrade)
+local sheetOptionsBlueOrb =
+{
+    width = 318,
+    height = 318,
+    numFrames = 6,
+}
+
+-- sequences table
+local sequences_blueOrb = {
+    -- consecutive frames sequence
+    {
+        name = "blueOrb",
+        start = 1,
+        count = 6,
+        time = 800,
+        loopCount = 0,
+        loopDirection = "forward"
+    }
+}
+
 -- 設定 image sheet
 local sheetOptions =
 {
@@ -50,6 +71,7 @@ local sheetOptions =
     },
 }
 local objectSheet = graphics.newImageSheet( "gameObjects.png", sheetOptions )
+local blueOrbSheet = graphics.newImageSheet( "blueOrbs.png", sheetOptionsBlueOrb )
 
 -- 初始化變數
 local lives = 3
@@ -237,6 +259,20 @@ local function restoreShip()
         end
     } )
 end
+
+local function createBlueOrb( event )
+    local blueOrb = display.newSprite( uiGroup, blueOrbSheet, sequences_blueOrb )
+	physics.addBody( blueOrb, "dynamic", { radius=20, isSensor=true } )
+	blueOrb:play()
+	blueOrb:scale( 0.2, 0.2 )
+	blueOrb.x = event.source.params.x
+	blueOrb.y = event.source.params.y
+	blueOrb:toBack();
+    blueOrb.myName = "upgradeBlueOrb"
+    transition.to( blueOrb, { y=display.contentHeight+40, time=3000,
+        onComplete = function() display.remove( blueOrb ) end
+    } )
+end
  
 
 local function endGame()
@@ -255,6 +291,20 @@ local function onCollision( event )
         if ( ( obj1.myName == "laser" and obj2.myName == "asteroid" ) or
              ( obj1.myName == "asteroid" and obj2.myName == "laser" ) )
         then
+        	local upgradeGenRate = math.random( 100 )
+
+        	if ( upgradeGenRate >= 50 ) then
+        		local _asteroid
+        		if ( obj1.myName == "asteroid" ) then
+        			_asteroid = obj1
+        		else
+        			_asteroid = obj2
+        		end
+        		local tm = timer.performWithDelay( 50, createBlueOrb )
+        		tm.params = {x = _asteroid.x, y = _asteroid.y}
+        		
+        	end
+
             -- 移除雷射與隕石
             display.remove( obj1 )
             display.remove( obj2 )
@@ -294,6 +344,17 @@ local function onCollision( event )
                     timer.performWithDelay( 1000, restoreShip )
                 end
             end
+        elseif ( ( obj1.myName == "ship" and obj2.myName == "upgradeBlueOrb" ) or
+                 ( obj1.myName == "upgradeBlueOrb" and obj2.myName == "ship" ) )
+        then
+
+        	if ( obj1.myName == "upgradeBlueOrb" ) then
+        		display.remove(obj1)
+        	else
+        		display.remove(obj2)
+        	end
+        	lives = lives + 1
+            updateText()
         end
     end
 end
