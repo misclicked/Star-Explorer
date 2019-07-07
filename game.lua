@@ -1,6 +1,8 @@
 
 local composer = require( "composer" )
 
+local widget = require( "widget" )
+
 local scene = composer.newScene()
 
 -- -----------------------------------------------------------------------------------
@@ -53,15 +55,20 @@ local objectSheet = graphics.newImageSheet( "gameObjects.png", sheetOptions )
 
 -- 初始化變數
 local lives = 3
+local bossLives = 200
+local bossLivesMax = bossLives
 local score = 0
 local died = false
  
 local asteroidsTable = {}
  
 local ship
+local boss
 local gameLoopTimer
+local bossLoopTimer
 local livesText
 local scoreText
+local bossLifeBar
 
 local backGroup = display.newGroup()
 local mainGroup = display.newGroup()
@@ -70,10 +77,13 @@ local uiGroup = display.newGroup()
 local explosionSound
 local fireSound
 local musicTrack
+local bossMusicTrack
 local bg1
 local bg2
 local runtime = 0
 local scrollSpeed = 1.4
+
+local bossPhase = false
 
 local function addScrollableBg()
     local bgImage = { type="image", filename="background.png" }
@@ -122,6 +132,9 @@ end
 local function updateText()
     livesText.text = "Lives: " .. lives
     scoreText.text = "Score: " .. score
+    if ( bossPhase == true ) then
+       bossLifeBar:setProgress( bossLives/bossLivesMax )
+   end
 end
 
  
@@ -202,7 +215,9 @@ end
 local function gameLoop()
  
     -- 產生新的隕石
-    createAsteroid()
+   	if ( bossPhase == false ) then
+    	createAsteroid()
+    end
 
     -- 自動射雷射光
     fireLaser()
@@ -221,6 +236,29 @@ local function gameLoop()
         end
     end
 end
+
+
+local function bossAttack()
+	-- 播放雷射音效!
+    audio.play( fireSound )
+ 
+    local newLaser = display.newImageRect( mainGroup, objectSheet, 5, 14, 40 )
+    physics.addBody( newLaser, "dynamic", { isSensor=true } )
+    newLaser.isBullet = true
+    newLaser.myName = "asteroid"
+ 
+    newLaser.x = boss.x
+    newLaser.y = boss.y
+    newLaser:toBack()
+ 
+    transition.to( newLaser, { y=boss.y+800, time=500,
+        onComplete = function() display.remove( newLaser ) end
+    } )
+end
+
+local function bossLoop()
+	bossAttack()
+end
  
  
 local function restoreShip()
@@ -236,6 +274,43 @@ local function restoreShip()
             died = false
         end
     } )
+end
+
+local function bossMovement()
+
+	transition.to(boss,{time=1000, x=math.random(80,680), y=math.random(30,580), onComplete=bossMovement})
+end
+
+local function createBoss()
+
+    bossPhase = true
+    audio.stop(1)
+	audio.play( bossMusicTrack, { channel=1, loops=-1 } )
+	boss = display.newImageRect( mainGroup, "ufo.png", 200, 200 )
+	boss.alpha = 0
+	boss.x = display.contentCenterX
+	boss.y = 200
+	physics.addBody( boss, { radius=60, isSensor=true } )
+	boss.isBodyActive = false
+	boss.myName = "boss"
+	bossLifeBar = widget.newProgressView(
+	    {
+	        left = 50,
+	        top = 100,
+	        width = display.contentWidth - 100,
+	        isAnimated = true
+	    }
+	)
+	bossLifeBar:setProgress( 1 )
+	-- 讓太空船淡入
+    transition.to( boss, { alpha=1, time=2000,
+        onComplete = function()
+			boss.isBodyActive = true
+			bossMovement()
+    		bossLoopTimer = timer.performWithDelay( 500, bossLoop, 0 )
+        end
+    } )
+
 end
  
 
@@ -272,6 +347,15 @@ local function onCollision( event )
             -- 更新分數
             score = score + 100
             updateText()
+            if ( score >= 0 ) then
+            	for i = #asteroidsTable, 1, -1 do
+            		display.remove( asteroidsTable[i] )
+	                table.remove( asteroidsTable, i )
+	            end
+        		if ( bossPhase == false )then
+	            	timer.performWithDelay(50, createBoss)
+	            end
+            end
 
         elseif ( ( obj1.myName == "ship" and obj2.myName == "asteroid" ) or
                  ( obj1.myName == "asteroid" and obj2.myName == "ship" ) )
@@ -294,6 +378,19 @@ local function onCollision( event )
                     timer.performWithDelay( 1000, restoreShip )
                 end
             end
+        elseif ( ( obj1.myName == "laser" and obj2.myName == "boss" ) or
+                 ( obj1.myName == "boss" and obj2.myName == "laser" ) )
+        then
+            -- 播放爆炸音效!
+            audio.play( explosionSound )
+            if ( obj1.myName == "laser" ) then
+            	display.remove( obj1 )
+            else
+            	display.remove( obj2 )
+            end
+            bossLives = bossLives - 1
+            score = score + 500
+            updateText()
         end
     end
 end
@@ -331,8 +428,8 @@ function scene:create( event )
 	ship.myName = "ship"
 
 	-- 顯示生命與記分板
-	livesText = display.newText( uiGroup, "Lives: " .. lives, 200, 80, native.systemFont, 36 )
-	scoreText = display.newText( uiGroup, "Score: " .. score, 400, 80, native.systemFont, 36 )
+	livesText = display.newText( uiGroup, "Lives: " .. lives, 200, 10, native.systemFont, 36 )
+	scoreText = display.newText( uiGroup, "Score: " .. score, 400, 10, native.systemFont, 36 )
 
     -- ship:addEventListener( "tap", fireLaser )
     ship:addEventListener( "touch", dragShip )
@@ -340,6 +437,7 @@ function scene:create( event )
     explosionSound = audio.loadSound( "audio/explosion.wav" )
     fireSound = audio.loadSound( "audio/fire.wav" )
     musicTrack = audio.loadStream( "audio/80s-Space-Game_Looping.wav")
+    bossMusicTrack = audio.loadStream( "audio/toby fox - UNDERTALE Soundtrack - 98 Battle Against a True Hero.mp3")
 end
 
 
@@ -372,7 +470,9 @@ function scene:hide( event )
  
     if ( phase == "will" ) then
         -- Code here runs when the scene is on screen (but is about to go off screen)
+        display.remove(bossLifeBar)
         timer.cancel( gameLoopTimer )
+        timer.cancel( bossLoopTimer )
  
     elseif ( phase == "did" ) then
         -- Code here runs immediately after the scene goes entirely off screen
