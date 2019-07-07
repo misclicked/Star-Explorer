@@ -70,6 +70,53 @@ local uiGroup = display.newGroup()
 local explosionSound
 local fireSound
 local musicTrack
+local bg1
+local bg2
+local runtime = 0
+local scrollSpeed = 1.4
+
+local function addScrollableBg()
+    local bgImage = { type="image", filename="background.png" }
+
+    -- Add First bg image
+    bg1 = display.newRect(backGroup, 0, 0, 800, 1400)
+    bg1.fill = bgImage
+    bg1.x = display.contentCenterX
+    bg1.y = display.contentCenterY
+
+    -- Add Second bg image
+    bg2 = display.newRect(backGroup, 0, 0, 800, 1400)
+    bg2.fill = bgImage
+    bg2.x = display.contentCenterX
+    bg2.y = display.contentCenterY - 1400
+end
+
+
+local function moveBg(dt)
+    bg1.y = bg1.y + scrollSpeed * dt
+    bg2.y = bg2.y + scrollSpeed * dt
+
+    if (bg1.y - display.contentHeight/2) > 1400 then
+        bg1:translate(0, -bg1.contentHeight * 2)
+    end
+    if (bg2.y - display.contentHeight/2) > 1400 then
+        bg2:translate(0, -bg2.contentHeight * 2)
+    end
+end
+
+
+local function getDeltaTime()
+   local temp = system.getTimer()
+   local dt = (temp-runtime) / (1000/60)
+   runtime = temp
+   return dt
+end
+
+
+local function enterFrame()
+    local dt = getDeltaTime()
+    moveBg(dt)
+end
 
 
 local function updateText()
@@ -275,9 +322,7 @@ function scene:create( event )
     sceneGroup:insert( uiGroup )  	-- 將uiGroup放入scene的display group
 
     -- 載入背景
-	local background = display.newImageRect( backGroup, "background.png", 800, 1400 )
-	background.x = display.contentCenterX
-	background.y = display.contentCenterY
+	addScrollableBg()
 
 	ship = display.newImageRect( mainGroup, objectSheet, 4, 98, 79 )
 	ship.x = display.contentCenterX
@@ -311,6 +356,7 @@ function scene:show( event )
         -- Code here runs when the scene is entirely on screen
         physics.start()
         Runtime:addEventListener( "collision", onCollision )
+        Runtime:addEventListener( "enterFrame", enterFrame )
         gameLoopTimer = timer.performWithDelay( 500, gameLoop, 0 )
         -- 播放背景音樂!
         audio.play( musicTrack, { channel=1, loops=-1 } )
@@ -331,6 +377,7 @@ function scene:hide( event )
     elseif ( phase == "did" ) then
         -- Code here runs immediately after the scene goes entirely off screen
         Runtime:removeEventListener( "collision", onCollision )
+        Runtime:removeEventListener( "enterFrame", enterFrame );
         physics.pause()
         -- 停止音樂!
         audio.stop( 1 )
