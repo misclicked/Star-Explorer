@@ -157,6 +157,9 @@ local function gameLoop()
     -- 產生新的隕石
     createAsteroid()
 
+    -- 自動射雷射光
+    fireLaser()
+
     -- 清理螢幕外面的隕石    
     for i = #asteroidsTable, 1, -1 do
         local thisAsteroid = asteroidsTable[i]
@@ -286,7 +289,7 @@ function scene:create( event )
 	livesText = display.newText( uiGroup, "Lives: " .. lives, 200, 80, native.systemFont, 36 )
 	scoreText = display.newText( uiGroup, "Score: " .. score, 400, 80, native.systemFont, 36 )
 
-    ship:addEventListener( "tap", fireLaser )
+    -- ship:addEventListener( "tap", fireLaser )
     ship:addEventListener( "touch", dragShip )
 
     explosionSound = audio.loadSound( "audio/explosion.wav" )
