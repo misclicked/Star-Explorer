@@ -59,6 +59,7 @@ local bossLives = 200
 local bossLivesMax = bossLives
 local score = 0
 local died = false
+local stopLaser = false
  
 local asteroidsTable = {}
  
@@ -169,6 +170,10 @@ end
  
  
 local function fireLaser()
+
+	if ( stopLaser == true )then
+		return
+	end
  
     -- 播放雷射音效!
     audio.play( fireSound )
@@ -186,6 +191,22 @@ local function fireLaser()
         onComplete = function() display.remove( newLaser ) end
     } )
 end
+
+
+local function useSkill()
+	local missle = display.newImageRect( mainGroup, "missle.png", 100, 100)
+    missle.x = display.contentCenterX
+    missle.y = ship.y
+    missle:toBack()
+ 
+    transition.to( missle, { y=display.contentCenterY, time=500,
+        onComplete = missleExplode
+    } )
+end
+
+
+local function missleExplode()
+end
  
  
 local function dragShip( event )
@@ -200,6 +221,9 @@ local function dragShip( event )
         ship.touchOffsetX = event.x - ship.x
 
     elseif ( "moved" == phase ) then
+    	if ( ship.touchOffsetX == nil)then
+        	ship.touchOffsetX = event.x - ship.x
+    	end
         -- 移動太空船到新的位置
         ship.x = event.x - ship.touchOffsetX
  
@@ -266,6 +290,7 @@ local function restoreShip()
     ship.isBodyActive = false
     ship.x = display.contentCenterX
     ship.y = display.contentHeight - 100
+    stopLaser = false
  
     -- 讓太空船淡入
     transition.to( ship, { alpha=1, time=4000,
@@ -283,7 +308,6 @@ end
 
 local function createBoss()
 
-    bossPhase = true
     audio.stop(1)
 	audio.play( bossMusicTrack, { channel=1, loops=-1 } )
 	boss = display.newImageRect( mainGroup, "ufo.png", 200, 200 )
@@ -353,6 +377,7 @@ local function onCollision( event )
 	                table.remove( asteroidsTable, i )
 	            end
         		if ( bossPhase == false )then
+        			bossPhase = true
 	            	timer.performWithDelay(50, createBoss)
 	            end
             end
@@ -362,6 +387,7 @@ local function onCollision( event )
         then
             if ( died == false ) then
                 died = true
+                stopLaser = true
 
                 -- 播放爆炸音效!
             	audio.play( explosionSound )
@@ -433,6 +459,12 @@ function scene:create( event )
 
     -- ship:addEventListener( "tap", fireLaser )
     ship:addEventListener( "touch", dragShip )
+
+    -- 加入按鈕
+    local skillBtn = widget.newButton({defaultFile="missle.png",onRelease=useSkill})
+    skillBtn.x = display.contentWidth-100
+    skillBtn.y = display.contentHeight-10
+    skillBtn.cd = 5
 
     explosionSound = audio.loadSound( "audio/explosion.wav" )
     fireSound = audio.loadSound( "audio/fire.wav" )
