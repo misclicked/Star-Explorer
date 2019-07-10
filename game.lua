@@ -14,6 +14,46 @@ local physics = require( "physics" )
 physics.start()
 physics.setGravity( 0, 0 )
 
+-- image sheet for blue orb (upgrade)
+local sheetOptionsBlueOrb =
+{
+    width = 318,
+    height = 318,
+    numFrames = 6,
+}
+
+-- sequences table
+local sequences_blueOrb = {
+    -- consecutive frames sequence
+    {
+        name = "blueOrb",
+        start = 1,
+        count = 6,
+        time = 800,
+        loopCount = 0,
+        loopDirection = "forward"
+    }
+}
+-- image sheet for explode
+local sheetOptionsExplode =
+{
+    width = 128,
+    height = 128,
+    numFrames = 3,
+}
+
+-- sequences table
+local sequences_explode = {
+    -- consecutive frames sequence
+    {
+        name = "explode",
+        start = 1,
+        count = 3,
+        time = 500,
+        loopCount = 0,
+        loopDirection = "forward"
+    }
+}
 -- 設定 image sheet
 local sheetOptions =
 {
@@ -52,6 +92,8 @@ local sheetOptions =
     },
 }
 local objectSheet = graphics.newImageSheet( "gameObjects.png", sheetOptions )
+local blueOrbSheet = graphics.newImageSheet( "blueOrbs.png", sheetOptionsBlueOrb )
+local explodeSheet = graphics.newImageSheet( "explodeSheet.png", sheetOptionsExplode )
 
 -- 初始化變數
 local lives = 3
@@ -66,10 +108,12 @@ local asteroidsTable = {}
 local ship
 local boss
 local gameLoopTimer
+local laserLoopTimer
 local bossLoopTimer
 local livesText
 local scoreText
 local bossLifeBar
+local skillBtn
 
 local backGroup = display.newGroup()
 local mainGroup = display.newGroup()
@@ -192,21 +236,40 @@ local function fireLaser()
     } )
 end
 
+local function missleExplode(x, y)
+    local explode = display.newSprite( uiGroup, explodeSheet, sequences_explode )
+	physics.addBody( explode, "dynamic", { isSensor = true, radius=300} )
+	explode:play()
+	explode:scale( 5, 5 )
+	explode.x = x
+	explode.y = y
+	explode:toBack();
+    explode.myName = "explode"
+    transition.to( explode, { alpha = 0, time=2000,
+        onComplete = function() display.remove( explode ) end
+    } )
+end
 
 local function useSkill()
+
+	if (stopLaser == true)then
+		return
+	end
+
 	local missle = display.newImageRect( mainGroup, "missle.png", 100, 100)
     missle.x = display.contentCenterX
     missle.y = ship.y
     missle:toBack()
  
-    transition.to( missle, { y=display.contentCenterY, time=500,
-        onComplete = missleExplode
+    transition.to( missle, { y=ship.y - 700, time=500,
+        onComplete = function() 
+        	missleExplode(missle.x,missle.y)
+        	display.remove(missle)
+        end
     } )
 end
 
 
-local function missleExplode()
-end
  
  
 local function dragShip( event )
@@ -222,6 +285,7 @@ local function dragShip( event )
 
     elseif ( "moved" == phase ) then
     	if ( ship.touchOffsetX == nil)then
+        	display.currentStage:setFocus( ship )
         	ship.touchOffsetX = event.x - ship.x
     	end
         -- 移動太空船到新的位置
@@ -242,9 +306,6 @@ local function gameLoop()
    	if ( bossPhase == false ) then
     	createAsteroid()
     end
-
-    -- 自動射雷射光
-    fireLaser()
 
     -- 清理螢幕外面的隕石    
     for i = #asteroidsTable, 1, -1 do
@@ -336,6 +397,20 @@ local function createBoss()
     } )
 
 end
+
+local function createBlueOrb( event )
+    local blueOrb = display.newSprite( mainGroup, blueOrbSheet, sequences_blueOrb )
+	physics.addBody( blueOrb, "dynamic", { radius=20, isSensor=true } )
+	blueOrb:play()
+	blueOrb:scale( 0.2, 0.2 )
+	blueOrb.x = event.source.params.x
+	blueOrb.y = event.source.params.y
+	blueOrb:toBack();
+    blueOrb.myName = "upgradeBlueOrb"
+    transition.to( blueOrb, { y=display.contentHeight+40, time=3000,
+        onComplete = function() display.remove( blueOrb ) end
+    } )
+end
  
 
 local function endGame()
@@ -354,6 +429,21 @@ local function onCollision( event )
         if ( ( obj1.myName == "laser" and obj2.myName == "asteroid" ) or
              ( obj1.myName == "asteroid" and obj2.myName == "laser" ) )
         then
+
+        	local upgradeGenRate = math.random( 100 )
+
+        	if ( upgradeGenRate >= 50 ) then
+        		local _asteroid
+        		if ( obj1.myName == "asteroid" ) then
+        			_asteroid = obj1
+        		else
+        			_asteroid = obj2
+        		end
+        		local tm = timer.performWithDelay( 50, createBlueOrb )
+        		tm.params = {x = _asteroid.x, y = _asteroid.y}
+        		
+        	end
+
             -- 移除雷射與隕石
             display.remove( obj1 )
             display.remove( obj2 )
@@ -371,7 +461,7 @@ local function onCollision( event )
             -- 更新分數
             score = score + 100
             updateText()
-            if ( score >= 0 ) then
+            if ( score >= 3000 ) then
             	for i = #asteroidsTable, 1, -1 do
             		display.remove( asteroidsTable[i] )
 	                table.remove( asteroidsTable, i )
@@ -416,7 +506,40 @@ local function onCollision( event )
             end
             bossLives = bossLives - 1
             score = score + 500
+            if (bossLives <= 0) then
+                display.remove( ship )
+                display.remove( boss )
+                timer.performWithDelay( 2000, endGame )
+            end
             updateText()
+        elseif ( ( obj1.myName == "ship" and obj2.myName == "upgradeBlueOrb" ) or
+                 ( obj1.myName == "upgradeBlueOrb" and obj2.myName == "ship" ) )
+        then
+
+        	if ( obj1.myName == "upgradeBlueOrb" ) then
+        		display.remove(obj1)
+        	else
+        		display.remove(obj2)
+        	end
+        	lives = lives + 1
+        	laserLoopTimer._delay = laserLoopTimer._delay*0.9
+            updateText()
+        elseif ( ( obj1.myName == "asteroid" and obj2.myName == "explode" ) or
+                 ( obj1.myName == "explode" and obj2.myName == "asteroid" ) )
+        then
+
+        	for i = #asteroidsTable, 1, -1 do
+                if ( asteroidsTable[i] == obj1 or asteroidsTable[i] == obj2 ) then
+                    display.remove(asteroidsTable[i])
+                    table.remove( asteroidsTable, i )
+                    break
+                end
+            end
+        elseif ( ( obj1.myName == "boss" and obj2.myName == "explode" ) or
+                 ( obj1.myName == "explode" and obj2.myName == "boss" ) )
+        then
+        	bossLives = bossLives - 20
+        	updateText()
         end
     end
 end
@@ -461,10 +584,11 @@ function scene:create( event )
     ship:addEventListener( "touch", dragShip )
 
     -- 加入按鈕
-    local skillBtn = widget.newButton({defaultFile="missle.png",onRelease=useSkill})
+    skillBtn = widget.newButton({defaultFile="missle.png",onRelease=useSkill})
     skillBtn.x = display.contentWidth-100
     skillBtn.y = display.contentHeight-10
     skillBtn.cd = 5
+    backGroup:insert(skillBtn)
 
     explosionSound = audio.loadSound( "audio/explosion.wav" )
     fireSound = audio.loadSound( "audio/fire.wav" )
@@ -488,6 +612,7 @@ function scene:show( event )
         Runtime:addEventListener( "collision", onCollision )
         Runtime:addEventListener( "enterFrame", enterFrame )
         gameLoopTimer = timer.performWithDelay( 500, gameLoop, 0 )
+        laserLoopTimer = timer.performWithDelay( 500, fireLaser, 0 )
         -- 播放背景音樂!
         audio.play( musicTrack, { channel=1, loops=-1 } )
     end
@@ -503,7 +628,9 @@ function scene:hide( event )
     if ( phase == "will" ) then
         -- Code here runs when the scene is on screen (but is about to go off screen)
         display.remove(bossLifeBar)
+        display.remove(skillBtn)
         timer.cancel( gameLoopTimer )
+        timer.cancel( laserLoopTimer )
         timer.cancel( bossLoopTimer )
  
     elseif ( phase == "did" ) then

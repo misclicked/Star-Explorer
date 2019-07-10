@@ -82,6 +82,7 @@ function scene:hide( event )
 		-- Code here runs immediately after the scene goes entirely off screen
         -- 停止音樂!
         audio.stop( 1 )
+        composer.removeScene( "menu" )
 
 	end
 end
